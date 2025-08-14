@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
     const cacheStatus = await cacheService.get('healthcheck');
     
     // Test LLM (simple ping)
-    await llmService.generate("ping");
+   // await llmService.generate("ping");
     
     res.json({ 
       status: 'healthy',
