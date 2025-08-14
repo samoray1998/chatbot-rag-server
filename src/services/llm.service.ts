@@ -13,7 +13,7 @@ class LLMService {
   constructor() {
     this.ollama = new Ollama({
       baseUrl: process.env.OLLAMA_URL || "http://ollama:11434",
-      model: "mistral:7B-Q4_K_M",
+      model: "mistral:7b-instruct-v0.2-q3_K_S",
       temperature: 0.7,
       // Note: We'll handle caching manually instead of using LangChain's built-in cache
       // to have more control over the caching logic
