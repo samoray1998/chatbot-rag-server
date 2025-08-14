@@ -25,13 +25,23 @@ class LLMService {
 
   private async initializeCache(): Promise<void> {
     try {
+      console.log("🔄 Initializing cache service...");
       this.cacheService = await getCacheService();
+
+      // Test the cache service
+      const testStatus = this.cacheService.getStatus();
+      console.log("📊 Cache service status:", testStatus);
+
+      if (!testStatus.connected) {
+        throw new Error("Cache service not connected");
+      }
+
       this.isInitialized = true;
-      console.log("LLM Service cache initialized successfully");
+      console.log("✅ LLM Service cache initialized successfully");
     } catch (error) {
-      console.error("Failed to initialize cache service:", error);
-      // Continue without cache if initialization fails
-      this.isInitialized = true;
+      console.error("❌ Failed to initialize cache service:", error);
+      this.cacheService = null; // ❗ Important: Set to null on failure
+      this.isInitialized = true; // Still set to true to allow service to work without cache
     }
   }
 
@@ -43,36 +53,57 @@ class LLMService {
 
   async generate(prompt: string): Promise<string> {
     try {
+      console.log("🔄 Starting generate() method");
+      console.log("📊 Initial state - isInitialized:", this.isInitialized);
+      console.log("📊 Initial state - cacheService exists:", !!this.cacheService);
       await this.ensureInitialized();
+
+      console.log("📊 After ensureInitialized - isInitialized:", this.isInitialized);
+      console.log("📊 After ensureInitialized - cacheService exists:", !!this.cacheService);
+      console.log("📊 Cache service ready:", this.cacheService?.isReady());
 
       // Create a cache key for this prompt
       const cacheKey = this.createCacheKey(prompt);
+      console.log("🔑 Generated cache key:", cacheKey);
 
       // Check cache first
       if (this.cacheService) {
+        console.log("🔍 Attempting cache lookup...");
         const cached = await this.cacheService.lookup(cacheKey);
+        console.log("📋 Cache lookup result:", cached ? "HIT" : "MISS");
         if (cached) {
-          console.log("Cache hit for prompt");
+          console.log("✅ Cache hit for prompt");
           return cached;
         }
+      } else {
+        console.log("❌ No cache service available for lookup");
       }
 
       console.log("Cache miss, generating new response");
 
       // Generate via Ollama
       const response = await this.ollama.invoke(prompt);
-      
+
       // Extract the response content - handle different response types
       const responseText = this.extractResponseText(response);
+      console.log("📝 Generated response length:", responseText.length);
 
       // Store in cache if available
       if (this.cacheService) {
-        await this.cacheService.update(cacheKey, responseText);
-        console.log("Response cached successfully");
+        console.log("💾 Attempting to cache response...");
+        try {
+          await this.cacheService.update(cacheKey, responseText);
+          console.log("✅ Response cached successfully");
+        } catch (cacheError) {
+          console.error("❌ Cache update failed:", cacheError);
+        }
+      } else {
+        console.log("❌ No cache service available for storage");
       }
 
       return responseText;
     } catch (error) {
+      console.error("💥 Generate method error:", error);
       console.error("Ollama error:", error);
       return `Error generating response: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -122,12 +153,12 @@ class LLMService {
       if (relevantDocs.length === 0) {
         console.log("No relevant documents found, using basic generation");
         const response = await this.generate(`Answer this question: ${prompt}\n\nNote: No specific context documents were available.`);
-        
+
         // Cache this response too
         if (this.cacheService) {
           await this.cacheService.update(contextCacheKey, response);
         }
-        
+
         return response;
       }
 
@@ -143,18 +174,18 @@ class LLMService {
       // 5. Create enhanced prompt
       const augmentedPrompt = `You are a helpful assistant that answers questions based on the provided context.
 
-INSTRUCTIONS:
-- Use the context below to answer the question
-- If the context doesn't contain enough information to fully answer the question, say so clearly
-- Be specific and cite relevant parts of the context when possible
-- If multiple sources provide conflicting information, acknowledge this
+    INSTRUCTIONS:
+    - Use the context below to answer the question
+    - If the context doesn't contain enough information to fully answer the question, say so clearly
+    - Be specific and cite relevant parts of the context when possible
+    - If multiple sources provide conflicting information, acknowledge this
 
-CONTEXT:
-${context}
+    CONTEXT:
+    ${context}
 
-QUESTION: ${prompt}
+    QUESTION: ${prompt}
 
-Please provide a comprehensive answer based on the context above:`;
+    Please provide a comprehensive answer based on the context above:`;
 
       // 6. Generate response
       const response = await this.ollama.invoke(augmentedPrompt);
@@ -197,15 +228,15 @@ Please provide a comprehensive answer based on the context above:`;
    * Search for similar documents without generating a response
    */
   async searchDocuments(
-    query: string, 
-    options?: { 
-      maxResults?: number; 
+    query: string,
+    options?: {
+      maxResults?: number;
       includeScores?: boolean;
       filter?: object;
     }
   ): Promise<any[]> {
     const { maxResults = 5, includeScores = false, filter } = options || {};
-    
+
     try {
       if (includeScores) {
         return await vectorStoreService.similaritySearchWithScore(query, maxResults, filter);
@@ -226,7 +257,7 @@ Please provide a comprehensive answer based on the context above:`;
     if (typeof response === 'string') {
       return response;
     }
-    
+
     // Handle AIMessage or similar objects
     if (response && typeof response === 'object') {
       // Try different possible properties
@@ -235,14 +266,14 @@ Please provide a comprehensive answer based on the context above:`;
       if (response.message) return String(response.message);
       if (response.output) return String(response.output);
       if (response.response) return String(response.response);
-      
+
       // If it has a toString method
       if (response.toString && typeof response.toString === 'function') {
         const str = response.toString();
         if (str !== '[object Object]') return str;
       }
     }
-    
+
     // Fallback to string conversion
     return String(response);
   }
@@ -274,7 +305,7 @@ Please provide a comprehensive answer based on the context above:`;
 
       // For streaming, we'll need to collect the full response to cache it
       let fullResponse = '';
-      
+
       // Note: This depends on whether your Ollama setup supports streaming
       // You might need to adjust this based on your LangChain Ollama version
       const response = await this.ollama.invoke(prompt);
@@ -346,9 +377,9 @@ Please provide a comprehensive answer based on the context above:`;
   /**
    * Health check for the service
    */
-  async healthCheck(): Promise<{ 
-    ollama: boolean; 
-    cache: boolean; 
+  async healthCheck(): Promise<{
+    ollama: boolean;
+    cache: boolean;
     vectorStore: boolean;
     details: any;
   }> {
