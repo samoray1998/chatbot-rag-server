@@ -19,6 +19,7 @@ router.get('/', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    console.log("the health check error is ")
     res.status(503).json({ 
       status: 'unhealthy',
       error: error 

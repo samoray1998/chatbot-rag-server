@@ -13,7 +13,7 @@ interface CacheInterface {
 }
 
 class SimpleCacheAdapter implements CacheInterface {
-  constructor(private client: RedisClientType, private ttl: number = 60) {}
+  constructor(private client: RedisClientType, private ttl: number = 60) { }
 
   async lookup(key: string): Promise<string | null> {
     try {
@@ -42,12 +42,12 @@ class CacheService {
   constructor() {
     // Initialize Redis client
     this.client = createClient({
-      url: process.env.REDIS_URL || "redis://redis:6379",
+      url:process.env.REDIS_URL,
       socket: {
         reconnectStrategy: (retries) => Math.min(retries * 100, 5000) // Exponential backoff
       }
     });
-
+    
     // Add error handling for the client
     this.client.on('error', (err) => {
       console.error('Redis Client Error:', err);
@@ -237,16 +237,16 @@ let cacheServiceInstance: CacheService | null = null;
 export const getCacheService = async (): Promise<CacheService> => {
   if (!cacheServiceInstance) {
     cacheServiceInstance = new CacheService();
-    
+
     // Wait for connection to be established
     let attempts = 0;
     const maxAttempts = 50; // 5 seconds total
-    
+
     while (!cacheServiceInstance.isReady() && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 100));
       attempts++;
     }
-    
+
     if (!cacheServiceInstance.isReady()) {
       throw new Error("Cache service failed to initialize within timeout");
     }

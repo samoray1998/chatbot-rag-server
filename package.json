@@ -2,11 +2,12 @@
   "name": "mistral-rag-server",
   "version": "1.0.0",
   "main": "dist/index.js",
+  
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
-  },
+  "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
+  "dev:debug": "nodemon --watch 'src/**/*.ts' --exec 'node --inspect --require ts-node/register' src/index.ts",
+  "dev:docker": "nodemon --watch 'src/**/*.ts' --exec 'node --inspect=0.0.0.0:9229 --require ts-node/register' src/index.ts"
+},
   "dependencies": {
     "@langchain/community": "^0.0.0",
     "@langchain/core": "^0.3.0",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "nodemon": "^3.1.10"
   }
 }
