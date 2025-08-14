@@ -26,7 +26,18 @@ class SimpleCacheAdapter implements CacheInterface {
 
   async update(key: string, value: string): Promise<void> {
     try {
-      await this.client.setEx(`cache:${key}`, this.ttl, value);
+      const fullKey = `cache:${key}`;
+      console.log("🔑 Attempting to store key:", fullKey);
+      console.log("💾 Value length:", value.length);
+      console.log("⏰ TTL:", this.ttl);
+
+      await this.client.setEx(fullKey, this.ttl, value);
+
+      // Immediately verify it was stored
+      const verification = await this.client.get(fullKey);
+      console.log("✅ Verification - key exists:", !!verification);
+      console.log("📊 Verification - value length:", verification?.length);
+
     } catch (error) {
       console.error("Cache update failed:", error);
       throw error;
@@ -42,12 +53,12 @@ class CacheService {
   constructor() {
     // Initialize Redis client
     this.client = createClient({
-      url:process.env.REDIS_URL,
+      url: process.env.REDIS_URL,
       socket: {
         reconnectStrategy: (retries) => Math.min(retries * 100, 5000) // Exponential backoff
       }
     });
-    
+
     // Add error handling for the client
     this.client.on('error', (err) => {
       console.error('Redis Client Error:', err);
