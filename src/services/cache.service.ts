@@ -76,7 +76,7 @@ class CacheService {
     });
 
     // Initialize cache adapter
-    this.cache = new SimpleCacheAdapter(this.client, 60);
+    this.cache = new SimpleCacheAdapter(this.client, 3600);
 
     this.connect().catch(console.error);
   }
