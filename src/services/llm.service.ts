@@ -121,6 +121,7 @@ class LLMService {
 
       // Create cache key that includes context for RAG queries
       const contextCacheKey = this.createCacheKey(`rag:${prompt}:docs${maxDocs}:score${minScore}`);
+      console.log("🔑 Generated cache key:", contextCacheKey);
 
       // Check cache first for RAG responses
       if (this.cacheService) {
@@ -137,22 +138,18 @@ class LLMService {
         return await this.generate(prompt);
       }
 
-      // 2. Retrieve relevant documents with scores if requested
-      let relevantDocs: any[] = [];
-      if (includeScores) {
-        const docsWithScores = await vectorStoreService.similaritySearchWithScore(prompt, maxDocs);
-        relevantDocs = docsWithScores
-          .filter(([doc, score]) => score >= minScore)
-          .map(([doc, score]) => ({ ...doc, score }));
-      } else {
-        const docs = await vectorStoreService.similaritySearch(prompt, maxDocs);
-        relevantDocs = docs;
-      }
+      // 2. Retrieve relevant documents with scores - FIXED: Always get scores for filtering
+      const docsWithScores = await vectorStoreService.similaritySearchWithScore(prompt, maxDocs);
+
+      // Filter by minimum score first
+      const filteredDocsWithScores = docsWithScores.filter(([doc, score]) => score >= minScore);
+
+      console.log(`Retrieved ${filteredDocsWithScores.length} documents after score filtering (minScore: ${minScore})`);
 
       // 3. Handle case where no relevant documents are found
-      if (relevantDocs.length === 0) {
-        console.log("No relevant documents found, using basic generation");
-        const response = await this.generate(`Answer this question: ${prompt}\n\nNote: No specific context documents were available.`);
+      if (filteredDocsWithScores.length === 0) {
+        console.log("No relevant documents found after filtering, using basic generation");
+        const response = await this.generate(`Answer this question: ${prompt}\n\nNote: No relevant context documents were available for this query.`);
 
         // Cache this response too
         if (this.cacheService) {
@@ -162,87 +159,61 @@ class LLMService {
         return response;
       }
 
-      // 4. Format context with metadata
-      const context = relevantDocs
-        .map((doc, index) => {
+      // 4. Additional quality check - calculate average score
+      const avgScore = filteredDocsWithScores.reduce((sum, [doc, score]) => sum + score, 0) / filteredDocsWithScores.length;
+      console.log(`Average relevance score: ${avgScore.toFixed(3)}`);
+
+      // If average quality is too low, fall back to basic generation
+      if (avgScore < minScore * 1.5) {
+        console.log("Retrieved context quality too low, using basic generation");
+        const response = await this.generate(`Answer this question: ${prompt}\n\nNote: Available context was not sufficiently relevant to this query.`);
+
+        if (this.cacheService) {
+          await this.cacheService.update(contextCacheKey, response);
+        }
+
+        return response;
+      }
+
+      // 5. Format documents based on includeScores option
+      const relevantDocs = filteredDocsWithScores.map(([doc, score]) =>
+        includeScores ? { ...doc, score } : doc
+      );
+
+      // 6. Format context with metadata
+      const context = filteredDocsWithScores
+        .map(([doc, score], index) => {
           const source = doc.metadata?.source || `Document ${index + 1}`;
-          const score = doc.score ? ` (relevance: ${doc.score.toFixed(3)})` : '';
-          return `SOURCE: ${source}${score}\nCONTENT: ${doc.pageContent}`;
+          const scoreInfo = includeScores ? ` (relevance: ${score.toFixed(3)})` : '';
+          return `SOURCE: ${source}${scoreInfo}\nCONTENT: ${doc.pageContent}`;
         })
         .join("\n\n---\n\n");
 
-      // 5. Create enhanced prompt
-      //   const augmentedPrompt = `You are a helpful assistant that answers questions based on the provided context.
+      console.log("Document sources:", filteredDocsWithScores.map(([doc, score]) => doc.metadata?.source || 'Unknown'));
 
-      // INSTRUCTIONS:
-      // - Use the context below to answer the question
-      // - If the context doesn't contain enough information to fully answer the question, say so clearly
-      // - Be specific and cite relevant parts of the context when possible
-      // - If multiple sources provide conflicting information, acknowledge this
-
-
-
-      // QUESTION: ${prompt}
-
-      // Please provide a comprehensive answer based on the context above:`;
+      // 6. CORRECTED: Clean prompt template without hardcoded context
       const augmentedPrompt = `You are a helpful assistant that answers questions based on the provided context.
 
-INSTRUCTIONS:
-- Use the context below to answer the question.
-- If the context doesn't contain enough information to fully answer the question, say so clearly.
-- Be specific and cite relevant parts of the context when possible.
-- If multiple sources provide conflicting information, acknowledge this.
+      INSTRUCTIONS:
+      - Use the context below to answer the question accurately and comprehensively.
+      - If the context doesn't contain enough information to fully answer the question, clearly state what information is missing.
+      - Be specific and cite relevant parts of the context when possible (e.g., "According to the documentation..." or "Based on the provided information...").
+      - If multiple sources provide conflicting information, acknowledge this and present both perspectives.
+      - Stay focused on the question and avoid adding information not present in the context.
 
-CONTEXT:
-DevUps (devups.ch) is a Swiss high-end digital agency positioned as a full-scale digital ecosystem rather than a traditional agency. Its motto is “Design. Develop. Dominate” and it integrates 9 strategic portals covering the entire digital journey. The brand tone is energetic, forward-looking, and visionary, emphasizing innovation, empowerment, and tech-savvy solutions. 
+      CONTEXT:
+      ${context}
 
-Key Services & Offerings:
-- Strategy & Design: Brand strategy, UI/UX, graphic design, and consulting.
-- Content & Media: Multichannel content creation (copywriting, video, animation, audio) for websites, social media, and other channels.
-- Acquisition & Performance: Growth marketing, SEO, paid media, social campaigns, analytics, and conversion optimization.
-- Development & Applications: Custom web/mobile apps, APIs, backend engineering, CRMs, ERPs, dashboards, inventory/booking systems.
-- Automation & Intelligent Systems: Business process automation, AI integration, RPA, chatbots, predictive analytics, GDPR-compliant workflows.
-- Innovation & R&D: Emerging tech projects (AI/ML, blockchain, Web3, AR/VR, IoT, gamification) and prototyping.
-- Security & Infrastructure: Cloud hosting, DevOps, server management, cybersecurity, compliance.
-- Training & Support: Digital training, e-learning, user onboarding, documentation, ongoing support.
-- Agile Engagement: Flexible hybrid teams (core + certified freelancers), modular solutions, SLA-backed support, white-label partnerships.
+      QUESTION: ${prompt}
 
-Brand Positioning & Tone:
-- High-end, future-focused, insight-driven, and modular digital ecosystem.
-- Key terminology: "modular digital operating system", "smart assistants", "AI-powered workflows", "agile collaboration".
-- Focus on partnership and scalable solutions, catering to startups, SMEs, corporates, and institutions.
+      Please provide a comprehensive answer based on the context above:`;
 
-Supported Languages:
-- English and French.
-- Multilingual global support for client teams, localized training and interfaces.
-
-Interactive Features & User Engagement:
-- Contact forms, booking tools, demos, strategy sessions, discovery calls.
-- Start & Scale toolkit for SMEs.
-- Emphasis on self-service, consultations, and guided onboarding.
-
-Common User Questions:
-- Differences from traditional agencies: modular ecosystem vs single-service provider.
-- Services offered: full range from strategy/design to automation/R&D.
-- Hiring flexibility: modular, scalable solutions.
-- Teams: hybrid (core + certified freelancers).
-- Quality, support, pricing: SLA-backed, flexible, no hidden fees, white-label available.
-- Getting started: contact for discovery call or consultation.
-- Support: multilingual, global coverage.
-
-CONTEXT:
-${context}
-
-QUESTION: ${prompt}
-
-Please provide a comprehensive answer based on the context above:`;
-
-
-      // 6. Generate response
+      // 7. Generate response
+      console.log("Generating response with RAG context");
       const response = await this.ollama.invoke(augmentedPrompt);
       const responseText = this.extractResponseText(response);
 
-      // 7. Cache the RAG response
+      // 8. Cache the RAG response
       if (this.cacheService) {
         await this.cacheService.update(contextCacheKey, responseText);
         console.log("RAG response cached successfully");
@@ -251,12 +222,11 @@ Please provide a comprehensive answer based on the context above:`;
       return responseText;
     } catch (error) {
       console.error("Error in generateWithContext:", error);
-      // Fallback to basic generation
       console.log("Falling back to basic generation due to error");
+      // Fallback to basic generation
       return await this.generate(prompt);
     }
   }
-
   /**
    * Add documents to the vector store
    */
