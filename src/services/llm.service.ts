@@ -172,20 +172,71 @@ class LLMService {
         .join("\n\n---\n\n");
 
       // 5. Create enhanced prompt
+      //   const augmentedPrompt = `You are a helpful assistant that answers questions based on the provided context.
+
+      // INSTRUCTIONS:
+      // - Use the context below to answer the question
+      // - If the context doesn't contain enough information to fully answer the question, say so clearly
+      // - Be specific and cite relevant parts of the context when possible
+      // - If multiple sources provide conflicting information, acknowledge this
+
+
+
+      // QUESTION: ${prompt}
+
+      // Please provide a comprehensive answer based on the context above:`;
       const augmentedPrompt = `You are a helpful assistant that answers questions based on the provided context.
 
-    INSTRUCTIONS:
-    - Use the context below to answer the question
-    - If the context doesn't contain enough information to fully answer the question, say so clearly
-    - Be specific and cite relevant parts of the context when possible
-    - If multiple sources provide conflicting information, acknowledge this
+INSTRUCTIONS:
+- Use the context below to answer the question.
+- If the context doesn't contain enough information to fully answer the question, say so clearly.
+- Be specific and cite relevant parts of the context when possible.
+- If multiple sources provide conflicting information, acknowledge this.
 
-    CONTEXT:
-    ${context}
+CONTEXT:
+DevUps (devups.ch) is a Swiss high-end digital agency positioned as a full-scale digital ecosystem rather than a traditional agency. Its motto is “Design. Develop. Dominate” and it integrates 9 strategic portals covering the entire digital journey. The brand tone is energetic, forward-looking, and visionary, emphasizing innovation, empowerment, and tech-savvy solutions. 
 
-    QUESTION: ${prompt}
+Key Services & Offerings:
+- Strategy & Design: Brand strategy, UI/UX, graphic design, and consulting.
+- Content & Media: Multichannel content creation (copywriting, video, animation, audio) for websites, social media, and other channels.
+- Acquisition & Performance: Growth marketing, SEO, paid media, social campaigns, analytics, and conversion optimization.
+- Development & Applications: Custom web/mobile apps, APIs, backend engineering, CRMs, ERPs, dashboards, inventory/booking systems.
+- Automation & Intelligent Systems: Business process automation, AI integration, RPA, chatbots, predictive analytics, GDPR-compliant workflows.
+- Innovation & R&D: Emerging tech projects (AI/ML, blockchain, Web3, AR/VR, IoT, gamification) and prototyping.
+- Security & Infrastructure: Cloud hosting, DevOps, server management, cybersecurity, compliance.
+- Training & Support: Digital training, e-learning, user onboarding, documentation, ongoing support.
+- Agile Engagement: Flexible hybrid teams (core + certified freelancers), modular solutions, SLA-backed support, white-label partnerships.
 
-    Please provide a comprehensive answer based on the context above:`;
+Brand Positioning & Tone:
+- High-end, future-focused, insight-driven, and modular digital ecosystem.
+- Key terminology: "modular digital operating system", "smart assistants", "AI-powered workflows", "agile collaboration".
+- Focus on partnership and scalable solutions, catering to startups, SMEs, corporates, and institutions.
+
+Supported Languages:
+- English and French.
+- Multilingual global support for client teams, localized training and interfaces.
+
+Interactive Features & User Engagement:
+- Contact forms, booking tools, demos, strategy sessions, discovery calls.
+- Start & Scale toolkit for SMEs.
+- Emphasis on self-service, consultations, and guided onboarding.
+
+Common User Questions:
+- Differences from traditional agencies: modular ecosystem vs single-service provider.
+- Services offered: full range from strategy/design to automation/R&D.
+- Hiring flexibility: modular, scalable solutions.
+- Teams: hybrid (core + certified freelancers).
+- Quality, support, pricing: SLA-backed, flexible, no hidden fees, white-label available.
+- Getting started: contact for discovery call or consultation.
+- Support: multilingual, global coverage.
+
+CONTEXT:
+${context}
+
+QUESTION: ${prompt}
+
+Please provide a comprehensive answer based on the context above:`;
+
 
       // 6. Generate response
       const response = await this.ollama.invoke(augmentedPrompt);

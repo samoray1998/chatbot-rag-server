@@ -10,7 +10,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    const response = await llmService.generate(message);
+    //const response = await llmService.generate(message);
+    const response= await llmService.generateWithContext(message)
     res.json({ response });
   } catch (error) {
     console.error("Chat error:", error);
